@@ -297,7 +297,7 @@ export default function LefLivePage() {
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
       {/* Left 30%: Monaco Editor */}
-      <div style={{ width: "40%", minWidth: 0, borderRight: "1px solid #eee", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: "50%", minWidth: 0, borderRight: "1px solid #eee", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: 8, background: "#f7f7f7", borderBottom: "1px solid #eee" }}>
           <b>LEF File Editor</b>
         </div>
