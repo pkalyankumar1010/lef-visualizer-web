@@ -177,20 +177,26 @@ const PatternDefs = ({ layerStyles, selectedLayer }: { layerStyles: Record<strin
 
 const PADDING = 40; // px, for fit
 
+const LAYER_STATES = ['display', 'highlight', 'hide'] as const;
+type LayerState = typeof LAYER_STATES[number];
+
 const ViaStackVisualization = ({
   viaStack,
   scale = 200,
   layerStyles,
   showCoordinates = true,
   showWHLabels = true,
+  layerStates,
+  setLayerStates,
 }: {
   viaStack: ViaStack
   scale: number
   layerStyles: Record<string, { fill: string; stroke: string; pattern: string }>
   showCoordinates?: boolean
   showWHLabels?: boolean
+  layerStates: Record<string, LayerState>
+  setLayerStates: (updater: (prev: Record<string, LayerState>) => Record<string, LayerState>) => void
 }) => {
-  const [selectedLayer, setSelectedLayer] = useState<string | null>(null)
 
   // Calculate bounds
   const allRects = viaStack.layers.flatMap((layer) => layer.rects)
@@ -277,6 +283,9 @@ const ViaStackVisualization = ({
   }
 
   const renderLayer = (layer: Layer, index: number) => {
+    const key = `${layer.layer}-${index}`;
+    const state = layerStates[key] || 'display';
+    if (state === 'hide') return null;
     const style = layerStyles[layer.layer] || { fill: "#999", stroke: "#666", pattern: "solid" }
     const isVia = layer.layer.toLowerCase().includes("via")
     const LABEL_OFFSET_X = 6; // px
@@ -286,7 +295,7 @@ const ViaStackVisualization = ({
     const centerYOffset = index * 18; // 18px per layer, adjust as needed
 
     return (
-      <g key={`${layer.layer}-${index}`}>
+      <g key={key}>
         {layer.rects.map((rect: number[], rectIndex: number) => {
           const [x1, y1, x2, y2] = rect
           const x = centerX + (x1 - (minX + maxX) / 2) * drawScale
@@ -294,14 +303,14 @@ const ViaStackVisualization = ({
           const w = (x2 - x1) * drawScale
           const h = (y2 - y1) * drawScale
 
-          const isSelected = selectedLayer === `${layer.layer}-${index}`
+          const isHighlighted = state === 'highlight';
 
-          // Top-left label (inside)
-          const labelX1 = x + LABEL_OFFSET_X;
-          const labelY1 = y + LABEL_OFFSET_Y;
-          // Bottom-right label (inside)
-          const labelX2 = x + w - LABEL_OFFSET_X;
-          const labelY2 = y + h - LABEL_OFFSET_BOTTOM;
+          // Lower left label (inside)
+          const labelX_LL = x + LABEL_OFFSET_X;
+          const labelY_LL = y + h - LABEL_OFFSET_BOTTOM;
+          // Upper right label (inside)
+          const labelX_UR = x + w - LABEL_OFFSET_X;
+          const labelY_UR = y + LABEL_OFFSET_Y;
 
           return (
             <g key={rectIndex}>
@@ -314,36 +323,36 @@ const ViaStackVisualization = ({
                   isVia ? `url(#viaGrid-${layer.layer.toLowerCase()})` : `url(#pattern-${layer.layer.toLowerCase()})`
                 }
                 stroke={style.stroke}
-                strokeWidth={isVia ? (isSelected ? 4 : 2) : isSelected ? 3 : 1}
-                opacity={isSelected ? 1 : 0.8}
+                strokeWidth={isVia ? (isHighlighted ? 4 : 2) : isHighlighted ? 3 : 1}
+                opacity={isHighlighted ? 1 : 0.8}
                 className="cursor-pointer transition-all duration-200 hover:opacity-100"
-                onClick={() => setSelectedLayer(isSelected ? null : `${layer.layer}-${index}`)}
+                // No onClick here, handled by badge
               />
 
               {/* Add coordinate labels always inside the rectangle, if enabled */}
               {showCoordinates && (
                 <>
               <text
-                    x={labelX1}
-                    y={labelY1}
+                x={labelX_LL}
+                y={labelY_LL}
                 className="lef-svg-text"
-                    textAnchor="start"
+                textAnchor="start"
                 fill={style.stroke}
-                    opacity={isSelected ? 1 : 0.7}
-                    fontWeight={isSelected ? 'bold' : 'normal'}
+                opacity={isHighlighted ? 1 : 0.7}
+                fontWeight={isHighlighted ? 'bold' : 'normal'}
               >
-                ({x1.toFixed(2)}, {y2.toFixed(2)})
+                ({x1.toFixed(2)}, {y1.toFixed(2)})
               </text>
               <text
-                    x={labelX2}
-                    y={labelY2}
+                x={labelX_UR}
+                y={labelY_UR}
                 className="lef-svg-text"
-                    textAnchor="end"
+                textAnchor="end"
                 fill={style.stroke}
-                    opacity={isSelected ? 1 : 0.7}
-                    fontWeight={isSelected ? 'bold' : 'normal'}
+                opacity={isHighlighted ? 1 : 0.7}
+                fontWeight={isHighlighted ? 'bold' : 'normal'}
               >
-                ({x2.toFixed(2)}, {y1.toFixed(2)})
+                ({x2.toFixed(2)}, {y2.toFixed(2)})
               </text>
                 </>
               )}
@@ -351,7 +360,7 @@ const ViaStackVisualization = ({
               {/* Center coordinate for reference, offset by index to avoid overlap */}
               <text
                 x={x + w / 2}
-                y={y + h / 2 + centerYOffset + (isSelected ? 15 : 0)}
+                y={y + h / 2 + centerYOffset + (isHighlighted ? 15 : 0)}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 className="lef-svg-text"
@@ -376,26 +385,43 @@ const ViaStackVisualization = ({
     <div>
       <div>
         <div className="lef-layer-badges">
-          {viaStack.layers.map((layer, index) => (
-            <Badge
-              key={`${layer.layer}-${index}`}
-              bg={selectedLayer === `${layer.layer}-${index}` ? "primary" : "secondary"}
-              className="lef-layer-badge"
-              onClick={() =>
-                setSelectedLayer(selectedLayer === `${layer.layer}-${index}` ? null : `${layer.layer}-${index}`)
-              }
-              style={{
-                backgroundColor:
-                  selectedLayer === `${layer.layer}-${index}` ? layerStyles[layer.layer]?.fill : undefined,
-              }}
-            >
-              {layer.layer}
-            </Badge>
-          ))}
+          {viaStack.layers.map((layer, index) => {
+            const key = `${layer.layer}-${index}`;
+            const state = layerStates[key] || 'display';
+            let badgeBg = 'secondary';
+            const badgeStyle: React.CSSProperties = {};
+            if (state === 'highlight') {
+              badgeBg = 'primary';
+              badgeStyle.backgroundColor = layerStyles[layer.layer]?.fill;
+              badgeStyle.color = '#fff';
+            } else if (state === 'hide') {
+              badgeBg = 'dark';
+              badgeStyle.backgroundColor = '#eee';
+              badgeStyle.color = '#888';
+              badgeStyle.textDecoration = 'line-through';
+            }
+            return (
+              <Badge
+                key={key}
+                bg={badgeBg}
+                className="lef-layer-badge"
+                onClick={() => {
+                  setLayerStates(prev => {
+                    const current = prev[key] || 'display';
+                    const next = LAYER_STATES[(LAYER_STATES.indexOf(current) + 1) % LAYER_STATES.length];
+                    return { ...prev, [key]: next };
+                  });
+                }}
+                style={badgeStyle}
+              >
+                {layer.layer}
+              </Badge>
+            );
+          })}
         </div>
         <div ref={svgContainerRef} className="lef-svg-container">
           <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} className="lef-svg" preserveAspectRatio="xMidYMid meet">
-            <PatternDefs layerStyles={layerStyles} selectedLayer={selectedLayer ?? undefined} />
+            <PatternDefs layerStyles={layerStyles} selectedLayer={undefined} />
 
             {/* Custom grid lines centered at logical 0,0 */}
             {gridLines}
@@ -426,6 +452,7 @@ export default function LEFVisualizer({ lefData: propLefData }: { lefData: ViaSt
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showCoordinates, setShowCoordinates] = useState(true)
   const [showWHLabels, setShowWHLabels] = useState(true)
+  const [layerStates, setLayerStates] = useState<Record<string, LayerState>>({});
 
   // Ref for the via analysis section
   const analysisRef = useRef<HTMLDivElement | null>(null)
@@ -533,6 +560,8 @@ export default function LEFVisualizer({ lefData: propLefData }: { lefData: ViaSt
                   layerStyles={layerStyles}
                   showCoordinates={showCoordinates}
                   showWHLabels={showWHLabels}
+                  layerStates={layerStates}
+                  setLayerStates={setLayerStates}
                 />
               </Card.Body>
             </div>
